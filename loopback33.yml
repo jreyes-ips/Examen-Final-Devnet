@@ -1,0 +1,46 @@
+---
+- name: Configurar Loopback33 y respaldar el router
+  hosts: routers
+  gather_facts: false
+
+  tasks:
+    - name: Mostrar fecha de ejecucion
+      debug:
+        msg: "{{ lookup('pipe', 'date -Is') }}"
+
+    - name: Configurar direcciones IPv6 de Loopback33
+      ios_config:
+        parents: interface Loopback33
+        lines:
+          - description Examen DevNet - Ansible
+          - ipv6 address 3001:ABCD:ABCD:1::1/128
+          - ipv6 address FE80::1 link-local
+          - no shutdown
+
+    - name: Consultar interfaz y configuracion completa
+      ios_command:
+        commands:
+          - show ipv6 interface Loopback33
+          - show running-config
+      register: consulta
+
+    - name: Mostrar verificacion de Loopback33
+      debug:
+        msg: "{{ consulta.stdout_lines[0] }}"
+
+    - name: Crear carpeta local para respaldos
+      file:
+        path: "{{ playbook_dir }}/respaldos"
+        state: directory
+        mode: "0700"
+
+    - name: Guardar resultado de show running-config
+      copy:
+        content: "{{ consulta.stdout[1] }}\n"
+        dest: "{{ playbook_dir }}/respaldos/{{ inventory_hostname }}_running-config.txt"
+        mode: "0600"
+
+    - name: Guardar configuracion de arranque
+      ios_config:
+        save_when: modified
+        

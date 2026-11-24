@@ -1,0 +1,97 @@
+---
+- name: Instalar Apache y publicar sitio en puerto 9999
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Mostrar fecha de ejecucion
+      debug:
+        msg: "{{ lookup('pipe', 'date -Is') }}"
+
+    - name: Instalar Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: true
+
+    - name: Crear carpeta del sitio
+      file:
+        path: /var/www/examen-devnet
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Crear pagina del examen
+      copy:
+        dest: /var/www/examen-devnet/index.html
+        mode: "0644"
+        content: |
+          <!doctype html>
+          <html lang="es">
+          <head>
+            <meta charset="utf-8">
+            <title>Examen DevNet</title>
+          </head>
+          <body>
+            <h1>Apache configurado mediante Ansible</h1>
+            <p>Johani Leandro Reyes Vasquez</p>
+            <p>Examen Final DevNet - Bimestre 15</p>
+            <p>Servidor disponible en el puerto 9999.</p>
+          </body>
+          </html>
+
+    - name: Configurar puerto y sitio del examen
+      copy:
+        dest: /etc/apache2/sites-available/examen-devnet.conf
+        mode: "0644"
+        content: |
+          Listen 9999
+          <VirtualHost *:9999>
+              ServerName localhost
+              DocumentRoot /var/www/examen-devnet
+              <Directory /var/www/examen-devnet>
+                  Require all granted
+                  Options -Indexes
+              </Directory>
+          </VirtualHost>
+      notify: Reiniciar Apache
+
+    - name: Habilitar sitio del examen
+      file:
+        src: /etc/apache2/sites-available/examen-devnet.conf
+        dest: /etc/apache2/sites-enabled/examen-devnet.conf
+        state: link
+      notify: Reiniciar Apache
+
+    - name: Comprobar sintaxis de Apache
+      command: apache2ctl configtest
+      changed_when: false
+
+    - name: Aplicar cambios pendientes
+      meta: flush_handlers
+
+    - name: Mantener Apache iniciado y habilitado
+      service:
+        name: apache2
+        state: started
+        enabled: true
+
+    - name: Comprobar respuesta HTTP en puerto 9999
+      uri:
+        url: http://127.0.0.1:9999
+        status_code: 200
+        return_content: true
+      register: respuesta
+
+    - name: Mostrar resultado
+      debug:
+        msg: "Apache responde HTTP {{ respuesta.status }} en puerto 9999."
+
+  handlers:
+    - name: Reiniciar Apache
+      service:
+        name: apache2
+        state: restarted
